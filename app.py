@@ -1,5 +1,5 @@
 import streamlit as st
-import subprocess
+import ffmpeg
 import librosa
 import noisereduce as nr
 import soundfile as sf
@@ -10,7 +10,6 @@ from pydub import AudioSegment
 from scipy.signal import butter, lfilter
 import os
 from tempfile import NamedTemporaryFile
-import re
 
 # Set page configuration
 st.set_page_config(
@@ -35,7 +34,7 @@ with col3:
 # Title
 st.title("Alkimi AdCensor: AI for Adulterate Content Detection & Compliance")
 
-# Instruction below title
+# Instructions
 st.markdown("""
 This tool extracts speech from video advertisements and detects explicit 18+ content.
 It also classifies sentences as positive or negative based on sentiment analysis.
@@ -51,16 +50,13 @@ if uploaded_file is not None:
 
     st.write("Processing video...")
 
-    # Convert Video to Audio (MP3)
+    # Convert Video to Audio (MP3) using ffmpeg-python
     def convert_video_to_mp3(input_file, output_file="audio.mp3"):
-        ffmpeg_cmd = [
-            "ffmpeg", "-i", input_file, "-vn", "-acodec", "libmp3lame", "-ab", "192k", "-ar", "44100", "-y", output_file
-        ]
         try:
-            subprocess.run(ffmpeg_cmd, check=True)
+            ffmpeg.input(input_file).output(output_file, format="mp3", acodec="libmp3lame", ab="192k", ar="44100").run(overwrite_output=True)
             return output_file
-        except subprocess.CalledProcessError:
-            st.error("❌ Conversion failed!")
+        except Exception as e:
+            st.error(f"❌ FFmpeg conversion failed: {e}")
             return None
 
     # Audio Preprocessing (Denoising & Filtering)
