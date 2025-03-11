@@ -1,6 +1,3 @@
-
-
-
 import streamlit as st
 import subprocess
 import librosa
@@ -22,12 +19,18 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Display logos in columns
+# Check if logo files exist before displaying
 col1, col2, col3 = st.columns([1, 6, 1])
 with col1:
-    st.image("alkimilogo.png", use_container_width=True)
+    if os.path.exists("alkimilogo.png"):
+        st.image("alkimilogo.png", use_container_width=True)
+    else:
+        st.warning("Missing: alkimilogo.png")
 with col3:
-    st.image("kensaltensilogo.png", use_container_width=True)
+    if os.path.exists("kensaltensilogo.png"):
+        st.image("kensaltensilogo.png", use_container_width=True)
+    else:
+        st.warning("Missing: kensaltensilogo.png")
 
 # Title
 st.title("Alkimi AdCensor: AI for Adulterate Content Detection & Compliance")
@@ -42,25 +45,16 @@ It also classifies sentences as positive or negative based on sentiment analysis
 uploaded_file = st.file_uploader("Upload a video file", type=["mp4", "mov", "avi"])
 
 if uploaded_file is not None:
-    # Save uploaded file temporarily
     with NamedTemporaryFile(delete=False, suffix=".mp4") as temp_file:
         temp_file.write(uploaded_file.read())
         temp_video_path = temp_file.name
 
-    # Process the video
     st.write("Processing video...")
 
-    # =============== 1. Convert Video to Audio (MP3) ===============
+    # Convert Video to Audio (MP3)
     def convert_video_to_mp3(input_file, output_file="audio.mp3"):
         ffmpeg_cmd = [
-            "ffmpeg",
-            "-i", input_file,
-            "-vn",
-            "-acodec", "libmp3lame",
-            "-ab", "192k",
-            "-ar", "44100",
-            "-y",
-            output_file
+            "ffmpeg", "-i", input_file, "-vn", "-acodec", "libmp3lame", "-ab", "192k", "-ar", "44100", "-y", output_file
         ]
         try:
             subprocess.run(ffmpeg_cmd, check=True)
@@ -69,23 +63,20 @@ if uploaded_file is not None:
             st.error("❌ Conversion failed!")
             return None
 
-    # =============== 2. Audio Preprocessing (Denoising & Filtering) ===============
+    # Audio Preprocessing (Denoising & Filtering)
     def load_audio(file_path):
         y, sr = librosa.load(file_path, sr=None)
         return y, sr
 
     def noise_reduction(y, sr):
         noise_sample = y[:sr]  # First 1 second as noise profile
-        reduced_noise = nr.reduce_noise(y=y, sr=sr, y_noise=noise_sample, prop_decrease=0.9)
-        return reduced_noise
+        return nr.reduce_noise(y=y, sr=sr, y_noise=noise_sample, prop_decrease=0.9)
 
     def bandpass_filter(y, sr, lowcut=300, highcut=3400, order=5):
         nyquist = 0.5 * sr
-        low = lowcut / nyquist
-        high = highcut / nyquist
+        low, high = lowcut / nyquist, highcut / nyquist
         b, a = butter(order, [low, high], btype='band')
-        filtered_audio = lfilter(b, a, y)
-        return filtered_audio
+        return lfilter(b, a, y)
 
     def amplify_audio(y):
         return y * 1.8  # Amplify audio by 1.8x
@@ -98,25 +89,22 @@ if uploaded_file is not None:
         sf.write(output_path, y_amplified, sr)
         return output_path
 
-    # =============== 3. Speech-to-Text Transcription ===============
+    # Speech-to-Text Transcription
     def transcribe_audio(audio_file):
         model = whisper.load_model("medium")
         result = model.transcribe(audio_file)
         return result["text"]
 
-    # =============== 4. 18+ Content Detection & Sentiment Analysis ===============
+    # 18+ Content Detection & Sentiment Analysis
     offensive_model_name = "cardiffnlp/twitter-roberta-base-offensive"
     offensive_tokenizer = AutoTokenizer.from_pretrained(offensive_model_name)
     offensive_model = AutoModelForSequenceClassification.from_pretrained(offensive_model_name)
-
     sentiment_pipeline = pipeline("sentiment-analysis")
-
     explicit_words = {"swearword1", "swearword2", "swearword3"}  # Add explicit words here
 
     def highlight_explicit_words(sentence):
         words = sentence.split()
-        highlighted_sentence = " ".join([f'<span style="color:red; font-weight:bold;">{word}</span>' if word.lower() in explicit_words else word for word in words])
-        return highlighted_sentence
+        return " ".join([f'<span style="color:red; font-weight:bold;">{word}</span>' if word.lower() in explicit_words else word for word in words])
 
     def classify_text(text):
         inputs = offensive_tokenizer(text, return_tensors="pt", truncation=True, padding=True)
@@ -124,8 +112,7 @@ if uploaded_file is not None:
             logits = offensive_model(**inputs).logits
         probs = torch.nn.functional.softmax(logits, dim=-1)
         labels = ["Non-Offensive", "Offensive"]
-        pred_label = labels[torch.argmax(probs).item()]
-        return pred_label, probs[0].tolist()
+        return labels[torch.argmax(probs).item()], probs[0].tolist()
 
     def analyze_text(text):
         sentences = text.split('.')
@@ -143,6 +130,23 @@ if uploaded_file is not None:
                     "sentiment": sentiment["label"]
                 })
         return analyzed_sentences
+
+    # Processing pipeline
+    audio_path = convert_video_to_mp3(temp_video_path)
+    if audio_path:
+        processed_audio_path = preprocess_audio(audio_path)
+        transcribed_text = transcribe_audio(processed_audio_path)
+        analyzed_results = analyze_text(transcribed_text)
+
+        # Display results
+        st.subheader("Analysis Results")
+        for result in analyzed_results:
+            st.markdown(f"**Sentence:** {result['sentence']}")
+            st.markdown(f"- **Offensive Label:** {result['offensive_label']}")
+            st.markdown(f"- **Sentiment:** {result['sentiment']}")
+            st.write("---")
+
+
 
 
 
