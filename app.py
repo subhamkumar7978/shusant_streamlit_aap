@@ -1,5 +1,5 @@
 import streamlit as st
-import ffmpeg
+import subprocess
 import librosa
 import noisereduce as nr
 import soundfile as sf
@@ -7,6 +7,7 @@ import torch
 import whisper
 from transformers import AutoModelForSequenceClassification, AutoTokenizer, pipeline
 from pydub import AudioSegment
+from moviepy.editor import VideoFileClip
 from scipy.signal import butter, lfilter
 import os
 from tempfile import NamedTemporaryFile
@@ -34,7 +35,7 @@ with col3:
 # Title
 st.title("Alkimi AdCensor: AI for Adulterate Content Detection & Compliance")
 
-# Instructions
+# Instruction below title
 st.markdown("""
 This tool extracts speech from video advertisements and detects explicit 18+ content.
 It also classifies sentences as positive or negative based on sentiment analysis.
@@ -50,13 +51,18 @@ if uploaded_file is not None:
 
     st.write("Processing video...")
 
-    # Convert Video to Audio (MP3) using ffmpeg-python
+    # Convert Video to Audio (Without FFmpeg)
     def convert_video_to_mp3(input_file, output_file="audio.mp3"):
         try:
-            ffmpeg.input(input_file).output(output_file, format="mp3", acodec="libmp3lame", ab="192k", ar="44100").run(overwrite_output=True)
+            video = VideoFileClip(input_file)
+            audio = video.audio
+            temp_wav = "temp_audio.wav"
+            audio.write_audiofile(temp_wav, codec="pcm_s16le")
+            sound = AudioSegment.from_wav(temp_wav)
+            sound.export(output_file, format="mp3")
             return output_file
         except Exception as e:
-            st.error(f"❌ FFmpeg conversion failed: {e}")
+            st.error(f"❌ Video-to-Audio conversion failed: {e}")
             return None
 
     # Audio Preprocessing (Denoising & Filtering)
@@ -141,10 +147,6 @@ if uploaded_file is not None:
             st.markdown(f"- **Offensive Label:** {result['offensive_label']}")
             st.markdown(f"- **Sentiment:** {result['sentiment']}")
             st.write("---")
-
-
-
-
 
 
 
