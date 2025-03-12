@@ -5,8 +5,8 @@ librosa
 noisereduce
 soundfile
 torch
-openai-whisper
 transformers
 pydub
 scipy
+imageio[ffmpeg]
 
