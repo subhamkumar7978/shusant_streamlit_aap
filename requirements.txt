@@ -1,11 +1,12 @@
 git+https://github.com/openai/whisper.git
+streamlit
+moviepy
 librosa
 noisereduce
 soundfile
-pydub
-transformers
 torch
-ffmpeg-python
-streamlit
-moviepy
+openai-whisper
+transformers
+pydub
+scipy
 
